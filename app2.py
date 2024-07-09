@@ -6,6 +6,8 @@ import os
 from PIL import Image
 import pandas as pd
 import time
+import threading
+import queue
 
 def extract_celebrity_name(result):
     if isinstance(result, pd.DataFrame) and not result.empty:
@@ -42,6 +44,39 @@ def recognize_celebrity(image_path):
         return recognized_celebrities
     except Exception as e:
         return [("An error occurred", (0, 0, 0, 0))]
+
+def recognize_celebrity_in_memory(frame):
+    try:
+        # Detect faces
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+        
+        recognized_celebrities = []
+        
+        for (x, y, w, h) in faces:
+            face_img = frame[y:y+h, x:x+w]
+            
+            result = DeepFace.find(img_path=face_img, db_path="dataset", enforce_detection=False)
+            
+            if isinstance(result, list) and len(result) > 0 and isinstance(result[0], pd.DataFrame) and not result[0].empty:
+                celebrity_name = extract_celebrity_name(result[0])
+                recognized_celebrities.append((celebrity_name, (x, y, w, h)))
+            else:
+                recognized_celebrities.append(("Unknown", (x, y, w, h)))
+        
+        return recognized_celebrities
+    except Exception as e:
+        print(f"Error in recognition: {e}")
+        return []
+
+def process_frame(frame_queue, result_queue):
+    while True:
+        frame = frame_queue.get()
+        if frame is None:
+            break
+        celebrities = recognize_celebrity_in_memory(frame)
+        result_queue.put(celebrities)
 
 def main():
     st.set_page_config(layout="wide")
@@ -156,38 +191,49 @@ def main():
         run = st.checkbox('Start Webcam')
         FRAME_WINDOW = st.image([])
         
-        camera = cv2.VideoCapture(0)
+        frame_queue = queue.Queue(maxsize=1)
+        result_queue = queue.Queue(maxsize=1)
         
-        last_recognition_time = 0
-        recognition_interval = 3  # Perform recognition every 3 seconds
-        current_celebrities = []
+        recognition_thread = threading.Thread(target=process_frame, args=(frame_queue, result_queue))
+        recognition_thread.start()
         
-        while run:
-            ret, frame = camera.read()
-            if not ret:
-                st.error("Failed to capture frame from webcam")
-                break
+        camera = None
+        try:
+            camera = cv2.VideoCapture(0)
+            if not camera.isOpened():
+                raise Exception("Could not open webcam")
             
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            current_celebrities = []
             
-            current_time = time.time()
-            if current_time - last_recognition_time > recognition_interval:
-                temp_path = "temp_webcam.jpg"
-                cv2.imwrite(temp_path, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+            while run:
+                ret, frame = camera.read()
+                if not ret:
+                    st.error("Failed to capture frame from webcam")
+                    break
                 
-                current_celebrities = recognize_celebrity(temp_path)
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 
-                os.remove(temp_path)
-                last_recognition_time = current_time
-            
-            # Add captions to the frame for each recognized face
-            for celebrity, (x, y, w, h) in current_celebrities:
-                cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-                cv2.putText(frame, celebrity, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-            
-            FRAME_WINDOW.image(frame)
+                if frame_queue.empty():
+                    frame_queue.put(frame)
+                
+                if not result_queue.empty():
+                    current_celebrities = result_queue.get()
+                
+                # Add captions to the frame for each recognized face
+                for celebrity, (x, y, w, h) in current_celebrities:
+                    cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+                    cv2.putText(frame, celebrity, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+                
+                FRAME_WINDOW.image(frame)
         
-        camera.release()
+        except Exception as e:
+            st.error(f"An error occurred: {e}")
+        
+        finally:
+            if camera is not None:
+                camera.release()
+            frame_queue.put(None)  # Signal the recognition thread to stop
+            recognition_thread.join()
 
 if __name__ == "__main__":
     main()

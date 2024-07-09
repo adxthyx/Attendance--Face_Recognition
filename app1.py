@@ -13,35 +13,20 @@ def extract_celebrity_name(result):
         parts = identity.split('\\')
         if len(parts) > 1:
             return parts[-2]
-    return "Unknown"
+    return "Name not found"
 
-def recognize_celebrity(image_path):
+def recognize_celebrity(image):
     try:
-        # Detect faces
-        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-        img = cv2.imread(image_path)
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
-        
-        recognized_celebrities = []
-        
-        for (x, y, w, h) in faces:
-            face_img = img[y:y+h, x:x+w]
-            cv2.imwrite("temp_face.jpg", face_img)
-            
-            result = DeepFace.find(img_path="temp_face.jpg", db_path="dataset", enforce_detection=False)
-            
-            if isinstance(result, list) and len(result) > 0 and isinstance(result[0], pd.DataFrame) and not result[0].empty:
-                celebrity_name = extract_celebrity_name(result[0])
-                recognized_celebrities.append((celebrity_name, (x, y, w, h)))
-            else:
-                recognized_celebrities.append(("Unknown", (x, y, w, h)))
-            
-            os.remove("temp_face.jpg")
-        
-        return recognized_celebrities
+        result = DeepFace.find(img_path=image, db_path="dataset", enforce_detection=False)
+        print("DeepFace result:", result)  # Debug print
+        if isinstance(result, list) and len(result) > 0 and isinstance(result[0], pd.DataFrame) and not result[0].empty:
+            celebrity_name = extract_celebrity_name(result[0])
+            identity = result[0].iloc[0]['identity']
+            return celebrity_name, identity
+        else:
+            return "No match found", None
     except Exception as e:
-        return [("An error occurred", (0, 0, 0, 0))]
+        return f"An error occurred: {str(e)}", None
 
 def main():
     st.set_page_config(layout="wide")
@@ -75,6 +60,34 @@ def main():
         justify-content: space-between;
         margin-top: 20px;
     }
+    .left-image {
+        width: 640px;
+        height: 480px;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
+    }
+    .right-image {
+        width: 640px;
+        height: 480px;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
+        margin-left: 90px;
+    }
+    .left-image img, .right-image img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+    }
     .prediction-label {
         text-align: center;
         margin-top: 20px;
@@ -107,6 +120,7 @@ def main():
         st.session_state.page = 'home'
 
     if st.session_state.page == 'home':
+        # Create two buttons with more precise positioning
         col1, col2, col3, col4, col5 = st.columns([42, 8, 2, 8, 40])
         with col2:
             if st.button("Upload Image"):
@@ -124,28 +138,25 @@ def main():
         if uploaded_file is not None:
             image = Image.open(uploaded_file)
             
-            col1, col2 = st.columns([1, 1])
+            col1, col2 = st.columns([1, 1.25])
             with col1:
-                st.image(image, caption="Uploaded Image", use_column_width=True)
+                st.markdown('<div class="left-image"><img src="data:image/png;base64,{}" alt="Uploaded Image"></div>'.format(image_to_base64(image)), unsafe_allow_html=True)
             
             st.markdown('<div class="center-button">', unsafe_allow_html=True)
-            if st.button("Recognize Celebrities", key="recognize_button", use_container_width=True):
+            if st.button("Recognize Celebrity", key="recognize_button", use_container_width=True):
                 with st.spinner("Recognizing..."):
                     temp_path = "temp_upload.jpg"
                     rgb_image = image.convert('RGB')
                     rgb_image.save(temp_path)
                     
-                    recognized_celebrities = recognize_celebrity(temp_path)
+                    celebrity_name, match_path = recognize_celebrity(temp_path)
                     
-                    img_with_boxes = np.array(image)
-                    for celebrity, (x, y, w, h) in recognized_celebrities:
-                        cv2.rectangle(img_with_boxes, (x, y), (x+w, y+h), (0, 255, 0), 2)
-                        cv2.putText(img_with_boxes, celebrity, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+                    if match_path:
+                        match_image = Image.open(match_path)
+                        with col2:
+                            st.markdown('<div class="right-image"><img src="data:image/png;base64,{}" alt="Matching Image from Dataset"></div>'.format(image_to_base64(match_image)), unsafe_allow_html=True)
                     
-                    with col2:
-                        st.image(img_with_boxes, caption="Recognized Celebrities", use_column_width=True)
-                    
-                    st.markdown(f'<p class="prediction-label">Recognized Celebrities: {", ".join([celeb for celeb, _ in recognized_celebrities])}</p>', unsafe_allow_html=True)
+                    st.markdown(f'<p class="prediction-label">Recognized Celebrity: {celebrity_name}</p>', unsafe_allow_html=True)
                     
                     os.remove(temp_path)
             st.markdown('</div>', unsafe_allow_html=True)
@@ -160,7 +171,7 @@ def main():
         
         last_recognition_time = 0
         recognition_interval = 3  # Perform recognition every 3 seconds
-        current_celebrities = []
+        current_celebrity = "Unknown"
         
         while run:
             ret, frame = camera.read()
@@ -172,22 +183,31 @@ def main():
             
             current_time = time.time()
             if current_time - last_recognition_time > recognition_interval:
+                # Perform celebrity recognition
                 temp_path = "temp_webcam.jpg"
                 cv2.imwrite(temp_path, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
                 
-                current_celebrities = recognize_celebrity(temp_path)
+                celebrity_name, _ = recognize_celebrity(temp_path)
+                current_celebrity = celebrity_name
                 
                 os.remove(temp_path)
                 last_recognition_time = current_time
             
-            # Add captions to the frame for each recognized face
-            for celebrity, (x, y, w, h) in current_celebrities:
-                cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-                cv2.putText(frame, celebrity, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+            # Add caption to the frame
+            cv2.putText(frame, f"Recognized: {current_celebrity}", (10, 30), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
             FRAME_WINDOW.image(frame)
         
         camera.release()
+
+def image_to_base64(image):
+    import base64
+    from io import BytesIO
+    
+    buffered = BytesIO()
+    image.save(buffered, format="PNG")
+    return base64.b64encode(buffered.getvalue()).decode()
 
 if __name__ == "__main__":
     main()
