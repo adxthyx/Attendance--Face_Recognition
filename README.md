@@ -4,7 +4,7 @@ To run this follow these steps:
 
 Step1:Clone this repo
 
-Step2: Install requirements.tx by using pip/pip3 install -r requirements.txt
+Step2: Install requirements.txt by using "pip/pip3 install -r requirements.txt"
 
 Step3: The final prototype is app4.py, so use that instead of other python scripts
 
