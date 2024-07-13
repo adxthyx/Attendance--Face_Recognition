@@ -7,10 +7,9 @@ from PIL import Image
 import pandas as pd
 import time
 
-# Get the absolute path of the script
+
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
-# Construct the path to the dataset
 dataset_path = os.path.join(script_dir, "Dataset")
 
 def extract_celebrity_name(result):
@@ -23,12 +22,12 @@ def extract_celebrity_name(result):
 
 def recognize_celebrity(image_path):
     try:
-        # Detect faces
+        
         face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
         img = cv2.imread(image_path)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         
-        # Adjust parameters
+        #
         faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
         
         recognized_celebrities = []
@@ -70,14 +69,14 @@ def recognize_celebrity_in_memory(frame):
         for (x, y, w, h) in faces:
             face_img = frame[y:y+h, x:x+w]
             
-            # Save the face image temporarily
+            
             temp_path = os.path.join(script_dir, "temp_face.jpg")
             cv2.imwrite(temp_path, cv2.cvtColor(face_img, cv2.COLOR_RGB2BGR))
             
             print(f"Searching for match in dataset: {dataset_path}")
             result = DeepFace.find(img_path=temp_path, db_path=dataset_path, enforce_detection=False, model_name="VGG-Face", distance_metric="cosine")
             
-            # os.remove(temp_path)  # Clean up the temporary file
+            # os.remove(temp_path)  
             
             if isinstance(result, list) and len(result) > 0 and isinstance(result[0], pd.DataFrame) and not result[0].empty:
                 celebrity_name = extract_celebrity_name(result[0])
@@ -95,7 +94,7 @@ def recognize_celebrity_in_memory(frame):
 def main():
     st.set_page_config(layout="wide")
     
-    # Custom CSS
+    
     st.markdown("""
     <style>
     .big-font {
@@ -144,7 +143,7 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    # Home button
+    
     if st.session_state.get('page') in ['upload', 'webcam']:
         if st.button('🏠', key='home_button'):
             st.session_state.page = 'home'
@@ -212,7 +211,7 @@ def main():
                 raise Exception("Could not open webcam")
             
             last_recognition_time = 0
-            recognition_interval = 4  # Perform recognition every 4 seconds
+            recognition_interval = 5  # Perform recognition every 5 seconds,You can change it yourself
             current_celebrities = []
             
             while run:
@@ -225,11 +224,11 @@ def main():
                 
                 current_time = time.time()
                 if current_time - last_recognition_time > recognition_interval:
-                    # Perform recognition
+                    
                     current_celebrities = recognize_celebrity_in_memory(frame_rgb)
                     last_recognition_time = current_time
                 
-                # Add captions to the frame for each recognized face
+                
                 frame_with_labels = frame_rgb.copy()
                 for celebrity, (x, y, w, h) in current_celebrities:
                     cv2.rectangle(frame_with_labels, (x, y), (x+w, y+h), (0, 255, 0), 2)
