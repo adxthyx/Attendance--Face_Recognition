@@ -44,7 +44,7 @@ def recognize_celebrity(image_path):
             else:
                 recognized_celebrities.append(("Unknown", (x, y, w, h)))
             
-            os.remove(temp_path)
+            # os.remove(temp_path)
         
         return recognized_celebrities
     except Exception as e:
@@ -73,7 +73,7 @@ def recognize_celebrity_in_memory(frame):
             print(f"Searching for match in dataset: {dataset_path}")
             result = DeepFace.find(img_path=temp_path, db_path=dataset_path, enforce_detection=False, model_name="VGG-Face", distance_metric="cosine")
             
-            os.remove(temp_path)  # Clean up the temporary file
+            # os.remove(temp_path)  # Clean up the temporary file
             
             if isinstance(result, list) and len(result) > 0 and isinstance(result[0], pd.DataFrame) and not result[0].empty:
                 celebrity_name = extract_celebrity_name(result[0])
@@ -192,13 +192,13 @@ def main():
                     
                     st.markdown(f'<p class="prediction-label">Recognized Celebrities: {", ".join([celeb for celeb, _ in recognized_celebrities])}</p>', unsafe_allow_html=True)
                     
-                    os.remove(temp_path)
+                    # os.remove(temp_path)
             st.markdown('</div>', unsafe_allow_html=True)
 
     elif st.session_state.page == "webcam":
         st.header("Webcam Celebrity Recognition")
         
-        run = st.checkbox('Start Webcam')
+        run = st.button('Start Webcam')
         FRAME_WINDOW = st.image([])
         
         camera = None
