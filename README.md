@@ -13,5 +13,5 @@ Step4: Use streamlit to run the app4.py project by entering "strealit run app4.p
 Step5: Select one from uploading the photo or Webcam option.
 
 
-I suggest using macbook as it has better camera for webcam,The windows camera quality is subpar which may result in incorrect output. The better the quality of the image the better will be the output result.
+Use good quality images or camera for correct result
 
