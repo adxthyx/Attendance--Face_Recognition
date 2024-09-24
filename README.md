@@ -1,6 +1,6 @@
 This is a face recognition project 
 
-To run this follow these steps:
+Follow these steps to run:
 
 Step1:Clone this repo
 
